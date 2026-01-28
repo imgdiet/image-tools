@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>图片格式转换工具</title>
+	<style>
+		body {
+			font-family: system-ui, -apple-system, sans-serif;
+			max-width: 800px;
+			margin: 2rem auto;
+			padding: 0 1rem;
+			background: #f4f4f9;
+			color: #333;
+		}
+
+		.container {
+			background: white;
+			padding: 2rem;
+			border-radius: 12px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+		}
+
+		h1 {
+			color: #2c3e50;
+			text-align: center;
+			margin-bottom: 1.5rem;
+		}
+
+		.control-group {
+			margin-bottom: 1.2rem;
+			padding: 10px;
+			background: #f8f9fa;
+			border-radius: 8px;
+			border: 1px solid #eee;
+		}
+
+		label {
+			display: block;
+			font-weight: 600;
+			margin-bottom: 0.5rem;
+		}
+
+		/* 控件样式 */
+		select,
+		input[type="range"],
+		input[type="file"] {
+			width: 100%;
+			padding: 8px;
+			margin-bottom: 5px;
+			border: 1px solid #ccc;
+			border-radius: 4px;
+			box-sizing: border-box;
+		}
+
+		.range-value {
+			float: right;
+			color: #007bff;
+			font-family: monospace;
+		}
+
+		button {
+			width: 100%;
+			padding: 12px;
+			background: #007bff;
+			color: white;
+			border: none;
+			border-radius: 6px;
+			font-size: 1rem;
+			cursor: pointer;
+			transition: 0.2s;
+			font-weight: bold;
+		}
+
+		button:hover {
+			background: #0056b3;
+		}
+
+		button:disabled {
+			background: #ccc;
+			cursor: not-allowed;
+		}
+
+		/* 预览区 */
+		.preview-area {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 20px;
+			margin-top: 20px;
+		}
+
+		.preview-card {
+			border: 2px dashed #ddd;
+			padding: 10px;
+			border-radius: 8px;
+			text-align: center;
+			background: #fff;
+			min-height: 200px;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+		}
+
+		.preview-card img {
+			max-width: 100%;
+			max-height: 300px;
+			object-fit: contain;
+			margin-top: 10px;
+		}
+
+		.stats {
+			margin-top: 10px;
+			font-size: 0.9rem;
+			color: #666;
+		}
+
+		.tag {
+			display: inline-block;
+			padding: 2px 6px;
+			background: #eee;
+			border-radius: 4px;
+			font-size: 0.8rem;
+			margin-bottom: 5px;
+		}
+
+		.loading-overlay {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: rgba(255, 255, 255, 0.9);
+			display: none;
+			justify-content: center;
+			align-items: center;
+			flex-direction: column;
+			z-index: 1000;
+		}
+
+		.spinner {
+			width: 40px;
+			height: 40px;
+			border: 4px solid #f3f3f3;
+			border-top: 4px solid #007bff;
+			border-radius: 50%;
+			animation: spin 1s linear infinite;
+		}
+
+		@keyframes spin {
+			0% {
+				transform: rotate(0deg);
+			}
+
+			100% {
+				transform: rotate(360deg);
+			}
+		}
+
+		/* 提示信息 */
+		.note {
+			font-size: 0.85rem;
+			color: #e67e22;
+			margin-top: 5px;
+			display: none;
+		}
+	</style>
+</head>
+
+<body>
+
+	<div class="loading-overlay" id="loading">
+		<div class="spinner"></div>
+		<p style="margin-top:10px; font-weight:bold;">正在处理中...</p>
+	</div>
+
+	<h1>在线图片格式转换</h1>
+
+	<div class="container">
+		<div class="control-group">
+			<label>1. 选择图片</label>
+			<input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp">
+		</div>
+
+		<div class="control-group">
+			<label>2. 目标格式</label>
+			<select id="formatSelect">
+				<option value="jpeg">JPG</option>
+				<option value="png">PNG</option>
+				<option value="webp" selected>WebP</option>
+				<option value="avif">AVIF</option>
+			</select>
+			<div id="avifNote" class="note">⚠️ 您的浏览器可能不支持 AVIF 导出，若失败请切换 Chrome 85+</div>
+		</div>
+
+		<div class="control-group" id="settingsPanel">
+			<label>
+				3. 压缩设置
+				<span id="qualityDisplay" class="range-value">质量: 0.8</span>
+			</label>
+
+			<input type="range" id="qualityRange" min="0.1" max="1" step="0.01" value="0.8">
+
+			<div id="pngSettings" style="display:none; margin-top:10px; border-top:1px dashed #ccc; padding-top:10px;">
+				<label style="display:flex; align-items:center; cursor:pointer;">
+					<input type="checkbox" id="pngLossless" style="width:auto; margin-right:8px;">
+					无损模式 (Lossless)
+				</label>
+				<div id="pngColorControl">
+					<label style="font-weight:normal; font-size:0.9rem; margin-top:5px;">
+						颜色数量 (2-256): <span id="cnumDisplay" class="range-value">256</span>
+					</label>
+					<input type="range" id="cnumRange" min="2" max="256" step="1" value="256">
+					<p style="font-size:0.8rem; color:#666;">颜色越少，体积越小 (类似 TinyPNG 原理)</p>
+				</div>
+			</div>
+		</div>
+
+		<button id="processBtn" disabled>开始转换</button>
+
+		<div class="preview-area">
+			<div class="preview-card">
+				<span class="tag">原图</span>
+				<div id="originalInfo" class="stats"></div>
+				<img id="originalImg" style="display:none;">
+			</div>
+			<div class="preview-card">
+				<span class="tag" id="engineTag">处理结果</span>
+				<div id="resultInfo" class="stats"></div>
+				<img id="resultImg" style="display:none;">
+				<a id="downloadBtn" href="#"
+					style="display:none; margin-top:15px; color:#007bff; text-decoration:underline;">下载图片</a>
+			</div>
+		</div>
+	</div>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/upng-js/2.1.0/UPNG.min.js"></script>
+
+	<script>
+		const els = {
+			fileInput: document.getElementById('fileInput'),
+			formatSelect: document.getElementById('formatSelect'),
+			qualityRange: document.getElementById('qualityRange'),
+			qualityDisplay: document.getElementById('qualityDisplay'),
+			pngSettings: document.getElementById('pngSettings'),
+			pngLossless: document.getElementById('pngLossless'),
+			pngColorControl: document.getElementById('pngColorControl'),
+			cnumRange: document.getElementById('cnumRange'),
+			cnumDisplay: document.getElementById('cnumDisplay'),
+			processBtn: document.getElementById('processBtn'),
+			loading: document.getElementById('loading'),
+			avifNote: document.getElementById('avifNote'),
+			originalImg: document.getElementById('originalImg'),
+			resultImg: document.getElementById('resultImg'),
+			originalInfo: document.getElementById('originalInfo'),
+			resultInfo: document.getElementById('resultInfo'),
+			downloadBtn: document.getElementById('downloadBtn'),
+			engineTag: document.getElementById('engineTag')
+		};
+
+		let currentFile = null;
+
+		function updateUI() {
+			const fmt = els.formatSelect.value;
+
+			// 1. 切换面板显示
+			if (fmt === 'png') {
+				els.pngSettings.style.display = 'block';
+				// PNG 模式下，原来的质量滑块不生效，禁用或隐藏它
+				els.qualityRange.disabled = true;
+				els.qualityDisplay.textContent = 'PNG模式下使用下方设置';
+			} else {
+				els.pngSettings.style.display = 'none';
+				els.qualityRange.disabled = false;
+				els.qualityDisplay.textContent = `质量: ${els.qualityRange.value}`;
+			}
+
+			// 2. PNG 内部交互
+			if (fmt === 'png') {
+				if (els.pngLossless.checked) {
+					els.pngColorControl.style.opacity = '0.5';
+					els.cnumRange.disabled = true;
+				} else {
+					els.pngColorControl.style.opacity = '1';
+					els.cnumRange.disabled = false;
+				}
+			}
+
+			// 3. AVIF 提示
+			els.avifNote.style.display = (fmt === 'avif') ? 'block' : 'none';
+		}
+
+		els.formatSelect.addEventListener('change', updateUI);
+		els.pngLossless.addEventListener('change', updateUI);
+
+		els.qualityRange.addEventListener('input', (e) => {
+			els.qualityDisplay.textContent = `质量: ${e.target.value}`;
+		});
+		els.cnumRange.addEventListener('input', (e) => {
+			els.cnumDisplay.textContent = e.target.value;
+		});
+
+		els.fileInput.addEventListener('change', (e) => {
+			const file = e.target.files[0];
+			if (!file) return;
+			currentFile = file;
+
+			els.originalImg.src = URL.createObjectURL(file);
+			els.originalImg.style.display = 'block';
+			els.originalInfo.textContent = `大小: ${(file.size / 1024).toFixed(2)} KB`;
+			els.processBtn.disabled = false;
+		});
+
+
+		els.processBtn.addEventListener('click', async () => {
+			if (!currentFile) return;
+			showLoading(true);
+
+			setTimeout(async () => {
+				try {
+					const fmt = els.formatSelect.value;
+					let resultBlob = null;
+					const img = await loadImage(currentFile);
+
+					if (fmt === 'png') {
+						els.engineTag.textContent = "引擎: UPNG.js (纯JS)";
+
+						const canvas = document.createElement('canvas');
+						canvas.width = img.naturalWidth;
+						canvas.height = img.naturalHeight;
+						const ctx = canvas.getContext('2d');
+						ctx.drawImage(img, 0, 0);
+						const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+						const cnum = els.pngLossless.checked ? 0 : parseInt(els.cnumRange.value);
+						const pngArrayBuffer = UPNG.encode([rgba.buffer], canvas.width, canvas.height, cnum);
+
+						resultBlob = new Blob([pngArrayBuffer], { type: 'image/png' });
+
+					} else {
+						els.engineTag.textContent = "转换成功";
+
+						const mimeType = `image/${fmt}`;
+						const quality = parseFloat(els.qualityRange.value);
+
+						const canvas = document.createElement('canvas');
+						canvas.width = img.naturalWidth;
+						canvas.height = img.naturalHeight;
+						const ctx = canvas.getContext('2d');
+
+						if (fmt === 'jpeg') {
+							ctx.fillStyle = '#FFFFFF';
+							ctx.fillRect(0, 0, canvas.width, canvas.height);
+						}
+						ctx.drawImage(img, 0, 0);
+						try {
+							resultBlob = await new Promise((resolve, reject) => {
+								canvas.toBlob((blob) => {
+									if (blob) resolve(blob);
+									else reject(new Error("转换失败，浏览器可能不支持此格式"));
+								}, mimeType, quality);
+							});
+						} catch (e) {
+							alert("转换失败：您的浏览器可能不支持 " + fmt + " 格式。建议使用 Chrome。");
+							showLoading(false);
+							return;
+						}
+					}
+					const url = URL.createObjectURL(resultBlob);
+					els.resultImg.src = url;
+					els.resultImg.style.display = 'block';
+
+					const sizeChange = ((resultBlob.size - currentFile.size) / currentFile.size * 100).toFixed(1);
+					const color = resultBlob.size < currentFile.size ? 'green' : 'red';
+
+					els.resultInfo.innerHTML = `
+                        <b>${(resultBlob.size / 1024).toFixed(2)} KB</b> 
+                        <span style="color:${color}; margin-left:5px;">
+                            (${resultBlob.size < currentFile.size ? '↓' : '↑'}${Math.abs(sizeChange)}%)
+                        </span>
+                    `;
+
+					els.downloadBtn.href = url;
+					els.downloadBtn.download = `converted_${Date.now()}.${fmt}`;
+					els.downloadBtn.style.display = 'inline-block';
+
+				} catch (err) {
+					console.error(err);
+					alert("处理过程中发生错误: " + err.message);
+				} finally {
+					showLoading(false);
+				}
+			}, 50); 
+		});
+
+		function loadImage(file) {
+			return new Promise((resolve, reject) => {
+				const img = new Image();
+				img.src = URL.createObjectURL(file);
+				img.onload = () => resolve(img);
+				img.onerror = reject;
+			});
+		}
+
+		function showLoading(show) {
+			els.loading.style.display = show ? 'flex' : 'none';
+		}
+
+		updateUI();
+	</script>
+</body>
+
+</html>

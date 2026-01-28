@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>拼图助手</title>
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+	<style>
+		/* --- 保持原有的暗色风格 --- */
+		:root {
+			--primary: #2563eb;
+			--bg: #0f172a;
+			--panel-w: 320px;
+			--text: #f8fafc;
+			--border: #334155;
+		}
+
+		* {
+			box-sizing: border-box;
+			user-select: none;
+			-webkit-user-drag: none;
+		}
+
+		body {
+			margin: 0;
+			padding: 0;
+			font-family: 'Microsoft YaHei', sans-serif;
+			height: 100vh;
+			display: flex;
+			background: var(--bg);
+			color: var(--text);
+			overflow: hidden;
+		}
+
+		.pintu-container {
+			display: flex;
+			width: 100%;
+			height: 100%;
+			position: relative;
+		}
+
+		/* 适配手机/平板：改为上下布局 */
+		@media (max-width: 768px) {
+			body {
+				overflow-y: auto;
+				height: auto;
+			}
+
+			.pintu-container {
+				flex-direction: column;
+				height: auto;
+				min-height: 100vh;
+			}
+
+			.panel {
+				width: 100% !important;
+				height: auto !important;
+				border-right: none !important;
+				border-bottom: 1px solid var(--border);
+			}
+
+			.panel.right {
+				border-left: none !important;
+				border-top: 1px solid var(--border);
+			}
+
+			.workspace {
+				flex: none !important;
+				height: 60vh !important;
+				min-height: 400px;
+				width: 100%;
+			}
+
+			.toggle-btn {
+				display: none !important;
+			}
+
+			/* 小屏只显示当前选中的模板分类 */
+			.layout-category-list .cat-item {
+				display: none;
+			}
+
+			.layout-category-list .cat-item.current {
+				display: block;
+			}
+		}
+
+		.panel {
+			width: var(--panel-w);
+			background: #1e293b;
+			border-right: 1px solid var(--border);
+			display: flex;
+			flex-direction: column;
+			z-index: 20;
+			flex-shrink: 0;
+			transition: width 0.3s ease;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.panel.right {
+			border-left: 1px solid var(--border);
+			border-right: none;
+		}
+
+		.panel.collapsed {
+			width: 0 !important;
+			border: none;
+			padding: 0;
+		}
+
+		.panel-content {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			overflow-y: auto;
+		}
+
+		.mode-tabs {
+			display: flex;
+			border-bottom: 1px solid var(--border);
+			background: #0f172a;
+			flex-shrink: 0;
+		}
+
+		.mode-tab {
+			flex: 1;
+			padding: 15px 0;
+			text-align: center;
+			cursor: pointer;
+			background: #1e293b;
+			color: #94a3b8;
+			font-weight: bold;
+			transition: 0.2s;
+			border-bottom: 3px solid transparent;
+		}
+
+		.mode-tab:hover {
+			color: white;
+		}
+
+		.mode-tab.active {
+			background: #252e42;
+			color: var(--primary);
+			border-bottom-color: var(--primary);
+		}
+
+		.toggle-btn {
+			position: absolute;
+			top: 50%;
+			transform: translateY(-50%);
+			width: 24px;
+			height: 80px;
+			background: #1e293b;
+			border: 1px solid #334155;
+			color: #94a3b8;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 50;
+			transition: all 0.3s ease;
+		}
+
+		#toggle-left {
+			left: 320px;
+			border-radius: 0 10px 10px 0;
+			border-left: none;
+		}
+
+		.pintu-container.left-closed #toggle-left {
+			left: 0;
+		}
+
+		#toggle-right {
+			right: 320px;
+			border-radius: 10px 0 0 10px;
+			border-right: none;
+		}
+
+		.pintu-container.right-closed #toggle-right {
+			right: 0;
+		}
+
+		.cat-item {
+			margin-bottom: 5px;
+			border: 1px solid #334155;
+			border-radius: 4px;
+			overflow: hidden;
+		}
+
+		.cat-header {
+			padding: 12px 15px;
+			background: #334155;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			font-size: 14px;
+			font-weight: bold;
+		}
+
+		.cat-body {
+			padding: 10px;
+			background: #1e293b;
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 8px;
+		}
+
+		.tpl-thumb {
+			aspect-ratio: 1;
+			background: #475569;
+			border: 2px solid transparent;
+			cursor: pointer;
+			border-radius: 4px;
+			display: grid;
+			gap: 1px;
+			padding: 2px;
+		}
+
+		.tpl-thumb.active {
+			border-color: var(--primary);
+			background: #0f172a;
+		}
+
+		.tpl-thumb div {
+			background: #94a3b8;
+		}
+
+		.stitch-settings {
+			flex: 1;
+			padding: 20px;
+			display: none;
+			flex-direction: column;
+			gap: 20px;
+		}
+
+		.stitch-settings.active {
+			display: flex;
+		}
+
+		.direction-group {
+			display: flex;
+			gap: 10px;
+		}
+
+		.dir-btn {
+			flex: 1;
+			padding: 15px;
+			background: #334155;
+			border: 2px solid transparent;
+			border-radius: 8px;
+			cursor: pointer;
+			text-align: center;
+			color: #94a3b8;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 5px;
+		}
+
+		.dir-btn.active {
+			border-color: var(--primary);
+			color: white;
+			background: rgba(37, 99, 235, 0.1);
+		}
+
+		.stitch-size-input {
+			margin-top: 10px;
+		}
+
+		.stitch-size-input label {
+			display: block;
+			font-size: 12px;
+			color: #94a3b8;
+			margin-bottom: 5px;
+		}
+
+		.stitch-size-input input {
+			width: 100%;
+			background: #0f172a;
+			border: 1px solid #334155;
+			color: white;
+			padding: 8px;
+			border-radius: 4px;
+		}
+
+		.workspace {
+			flex: 1;
+			position: relative;
+			background-color: #0f172a;
+			background-image: radial-gradient(#334155 1px, transparent 1px);
+			background-size: 20px 20px;
+			display: flex;
+			z-index: 10;
+			justify-content: center;
+			align-items: center;
+			overflow: hidden;
+		}
+
+		#physical-container {
+			flex-shrink: 0;
+			background: white;
+			box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+			transform-origin: center center;
+			transition: width 0.2s, height 0.2s;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
+
+		#collage-canvas {
+			width: 100%;
+			height: 100%;
+			box-sizing: border-box;
+		}
+
+		#collage-canvas.mode-layout {
+			display: grid;
+			overflow: hidden;
+		}
+
+		#collage-canvas.mode-stitch {
+			display: flex;
+			overflow: hidden;
+			padding: 20px;
+			gap: 10px;
+			background-color: transparent;
+		}
+
+		#collage-canvas.mode-stitch.stitch-v {
+			flex-direction: column;
+			width: 100%;
+			height: auto;
+			align-items: stretch;
+		}
+
+		#collage-canvas.mode-stitch.stitch-h {
+			flex-direction: row;
+			height: 100%;
+			width: auto;
+			align-items: stretch;
+		}
+
+		.grid-slot {
+			position: relative;
+			background: #f1f5f9;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			overflow: hidden;
+			user-select: none;
+		}
+
+		.mode-layout .grid-slot {
+			width: 100%;
+			height: 100%;
+			cursor: grab;
+		}
+
+		.mode-layout .grid-slot:active {
+			cursor: grabbing;
+		}
+
+		.mode-stitch .grid-slot {
+			flex-shrink: 0;
+			cursor: default;
+			background: transparent;
+		}
+
+		.mode-stitch.stitch-v .grid-slot {
+			width: 100%;
+			height: auto;
+		}
+
+		.mode-stitch.stitch-h .grid-slot {
+			height: 100%;
+			width: auto;
+		}
+
+		.grid-slot.empty {
+			border: none !important;
+			cursor: pointer;
+		}
+
+		.grid-slot.empty::after {
+			content: "+";
+			font-size: 40px;
+			color: #cbd5e1;
+		}
+
+		.grid-slot.empty:hover {
+			background: #e2e8f0;
+		}
+
+		.mode-layout .grid-slot img {
+			position: absolute;
+			pointer-events: none;
+			transform-origin: center center;
+			max-width: none !important;
+			max-height: none !important;
+			will-change: transform;
+		}
+
+		.mode-stitch .grid-slot img {
+			display: block;
+			object-fit: fill;
+		}
+
+		.mode-stitch.stitch-v .grid-slot img {
+			width: 100% !important;
+			height: auto !important;
+		}
+
+		.mode-stitch.stitch-h .grid-slot img {
+			height: 100% !important;
+			width: auto !important;
+		}
+
+		.slot-controls {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			background: rgba(0, 0, 0, 0.85);
+			padding: 10px;
+			border-radius: 15px;
+			display: flex;
+			gap: 8px;
+			z-index: 999;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.1s;
+		}
+
+		.mode-layout .slot-controls {
+			flex-direction: column;
+		}
+
+		.mode-stitch .slot-controls {
+			flex-direction: row;
+		}
+
+		.grid-slot:hover {
+			border: 1px solid #ccc;
+		}
+
+		.grid-slot:hover .slot-controls {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		.ctrl-row {
+			display: flex;
+			justify-content: center;
+			gap: 8px;
+		}
+
+		.icon-btn {
+			width: 40px;
+			height: 40px;
+			min-width: 40px;
+			min-height: 40px;
+			flex-shrink: 0;
+			border-radius: 8px;
+			background: rgba(255, 255, 255, 0.15);
+			border: 2px solid rgba(255, 255, 255, 0.3);
+			color: white;
+			font-size: 16px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			pointer-events: auto;
+		}
+
+		.icon-btn:hover {
+			background: var(--primary);
+			border-color: var(--primary);
+		}
+
+		.icon-btn.delete:hover {
+			background: #ef4444;
+			border-color: #ef4444;
+		}
+
+		.header {
+			padding: 15px;
+			background: #0f172a;
+			border-bottom: 1px solid var(--border);
+			flex-shrink: 0;
+		}
+
+		.header h2 {
+			margin: 0;
+			font-size: 16px;
+			color: white;
+			text-align: center;
+		}
+
+		.controls {
+			padding: 15px;
+			flex: 1;
+			overflow-y: auto;
+		}
+
+		.control-group {
+			margin-bottom: 20px;
+			border-bottom: 1px solid #334155;
+			padding-bottom: 15px;
+		}
+
+		.control-row label {
+			display: block;
+			font-size: 12px;
+			color: #cbd5e1;
+			margin-bottom: 5px;
+		}
+
+		select,
+		input {
+			width: 100%;
+			padding: 8px;
+			background: #334155;
+			border: 1px solid #475569;
+			color: white;
+			border-radius: 4px;
+			outline: none;
+			font-size: 13px;
+		}
+
+		input[type="color"] {
+			height: 36px;
+			padding: 2px;
+			cursor: pointer;
+		}
+
+		.custom-size-box {
+			display: flex;
+			gap: 5px;
+			margin-top: 5px;
+			display: none;
+		}
+
+		button.btn {
+			width: 100%;
+			padding: 12px;
+			background: var(--primary);
+			color: white;
+			border: none;
+			border-radius: 6px;
+			cursor: pointer;
+			font-weight: 600;
+			font-size: 14px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+		}
+
+		button.btn:hover {
+			background: #1d4ed8;
+		}
+
+		button.btn.green {
+			background: #10b981;
+		}
+
+		#hidden-file-input,
+		#bg-image-input {
+			display: none;
+		}
+
+		#template-select-container {
+			position: sticky;
+			top: 0;
+			z-index: 10;
+			background: #0f172a;
+			padding: 10px 20px;
+			border-bottom: 1px solid var(--border);
+			flex-shrink: 0;
+		}
+
+		.layout-category-list {
+			flex: 1;
+			overflow-y: auto;
+			padding: 10px;
+		}
+
+		#slot-bg-picker {
+			display: none;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="pintu-container" id="pintu-container">
+		<div class="panel" id="panel-left">
+			<div class="mode-tabs">
+				<div class="mode-tab active" onclick="switchMode('layout')">布局拼图</div>
+				<div class="mode-tab" onclick="switchMode('stitch')">长接拼图</div>
+			</div>
+			<div class="panel-content" id="view-layout">
+				<div id="template-select-container">
+					<select id="template-select"></select>
+				</div>
+				<div class="layout-category-list" id="layout-list-container"></div>
+			</div>
+			<div class="stitch-settings" id="view-stitch" style="display:none;">
+				<div class="control-group" style="border:none; padding:0;">
+					<label style="color:#cbd5e1; font-size:14px; font-weight:bold; margin-bottom:10px;">拼接方向</label>
+					<div class="direction-group">
+						<div class="dir-btn active" id="dir-v" onclick="setStitchDir('v')"><i
+								class="fas fa-arrows-alt-v"></i> 竖向拼接</div>
+						<div class="dir-btn" id="dir-h" onclick="setStitchDir('h')"><i class="fas fa-arrows-alt-h"></i>
+							横向拼接</div>
+					</div>
+					<div class="stitch-size-input" id="stitch-v-config">
+						<label>导出宽度 (px) - 边距按比例缩放</label>
+						<input type="number" id="stitch-export-w" value="2000">
+					</div>
+					<div class="stitch-size-input" id="stitch-h-config" style="display:none;">
+						<label>导出高度 (px) - 边距按比例缩放</label>
+						<input type="number" id="stitch-export-h" value="2000">
+					</div>
+				</div>
+				<div style="margin-top:auto;">
+					<button class="btn" style="height:60px; font-size:16px;"
+						onclick="document.getElementById('hidden-file-input').click()"><i
+							class="fas fa-plus-circle"></i> 添加图片</button>
+				</div>
+			</div>
+			<div class="panel-content" id="view-custom" style="display:none;">
+				<div class="panel-header">自定义网格</div>
+				<div style="padding:20px; display:flex; flex-direction:column; gap:20px;">
+					<div>
+						<label style="display:block; margin-bottom:5px; color:#cbd5e1;">行数（1-20）</label>
+						<input type="number" min="1" max="20" value="3" id="custom-rows-input"
+							oninput="updateCustomRows(this.value)">
+					</div>
+					<div>
+						<label style="display:block; margin-bottom:5px; color:#cbd5e1;">列数（1-20）</label>
+						<input type="number" min="1" max="20" value="3" id="custom-cols-input"
+							oninput="updateCustomCols(this.value)">
+					</div>
+				</div>
+				<div style="margin-top:auto; padding:0 20px 20px;">
+					<button class="btn" style="height:60px; font-size:16px;"
+						onclick="document.getElementById('hidden-file-input').click()"><i
+							class="fas fa-plus-circle"></i> 添加图片</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="toggle-btn" id="toggle-left" onclick="togglePanel('left')"><i class="fas fa-chevron-left"></i></div>
+
+		<div class="workspace" id="workspace">
+			<div id="physical-container">
+				<div id="collage-canvas" class="mode-layout"></div>
+			</div>
+		</div>
+
+		<div class="toggle-btn" id="toggle-right" onclick="togglePanel('right')"><i class="fas fa-chevron-right"></i>
+		</div>
+
+		<div class="panel right" id="panel-right">
+			<div class="panel-content">
+				<div class="header">
+					<h2>参数配置</h2>
+				</div>
+				<div class="controls">
+					<div class="control-group" id="layout-uploader">
+						<button class="btn" onclick="document.getElementById('hidden-file-input').click()"><i
+								class="fas fa-images"></i> 批量上传图片</button>
+					</div>
+					<input type="file" id="hidden-file-input" multiple accept="image/*">
+					<input type="file" id="bg-image-input" accept="image/*">
+					
+					<div class="control-group">
+						<div class="control-row"><label>背景颜色（背景图片存在时会被覆盖）</label><input type="color" id="bg-picker"
+								value="#ffffff" oninput="updateBg()"></div>
+					</div>
+					<div class="control-group">
+						<div class="control-row"><label>背景图片（cover 填充）</label></div>
+						<button class="btn" onclick="document.getElementById('bg-image-input').click()"><i
+								class="fas fa-image"></i> 上传背景图片</button>
+						<button class="btn" onclick="clearBackground()" style="margin-top:8px; background:#ef4444;"><i
+								class="fas fa-times"></i> 清除背景图片</button>
+					</div>
+					<div class="control-group">
+						<div class="control-row"><label>内边距</label><input type="range" id="ctrl-padding" min="0"
+								max="200" value="40" oninput="updateStyle()"></div>
+						<div class="control-row"><label>格子间距</label><input type="range" id="ctrl-gap" min="0" max="200"
+								value="20" oninput="updateStyle()"></div>
+						<div class="control-row"><label>圆角</label><input type="range" id="ctrl-radius" min="0" max="500"
+								value="0" oninput="updateStyle()"></div>
+					</div>
+					<div class="control-group">
+						<div class="control-row"><label>导出格式</label>
+							<select id="export-fmt">
+								<option value="jpg">JPG</option>
+								<option value="png">PNG</option>
+							</select>
+						</div>
+						<button class="btn green" onclick="exportImage()"><i class="fas fa-download"></i> 导出图片</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<input type="color" id="slot-bg-picker">
+
+	</div>
+
+	<script>
+		const templates = {
+			1: [{ id: '1-full', css: 'repeat(1, 1fr) / repeat(1, 1fr)' }],
+
+			2: [
+				{ id: '2-t1b1', css: 'repeat(2, 1fr) / repeat(1, 1fr)', slots: [{}, {}] },
+				{ id: '2-l1r1', css: 'repeat(1, 1fr) / repeat(2, 1fr)', slots: [{}, {}] }
+			],
+
+			3: [
+				{ id: '3-t1b2', css: 'repeat(2, 1fr) / repeat(2, 1fr)', slots: [{ gridColumn: 'span 2' }, {}, {}] },
+				{ id: '3-t2b1', css: 'repeat(2, 1fr) / repeat(2, 1fr)', slots: [{}, {}, { gridColumn: 'span 2' }] },
+				{ id: '3-l1r2', css: 'repeat(2, 1fr) / repeat(2, 1fr)', slots: [{ gridRow: 'span 2' }, {}, {}] },
+				{ id: '3-l2r1', css: 'repeat(2, 1fr) / repeat(2, 1fr)', slots: [{}, { gridRow: 'span 2' }, {}] },
+				{ id: '3-l1rr', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{ gridRow: 'span 3', gridColumn: 'span 2' }, {}, { gridRow: 'span 2' }] },
+				{ id: '3-t1bb', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{ gridRow: 'span 2', gridColumn: 'span 3' }, {}, { gridColumn: 'span 2' }] }
+			],
+
+			4: [
+				{ id: '4-grid', css: 'repeat(2, 1fr) / repeat(2, 1fr)', slots: [{}, {}, {}, {}] },
+				{ id: '4-t1b3', css: 'repeat(2, 1fr) / repeat(3, 1fr)', slots: [{ gridColumn: 'span 3' }, {}, {}, {}] },
+				{ id: '4-b1t3', css: 'repeat(2, 1fr) / repeat(3, 1fr)', slots: [{}, {}, {}, { gridColumn: 'span 3' }] },
+				{ id: '4-l1r3', css: 'repeat(3, 1fr) / repeat(2, 1fr)', slots: [{ gridRow: 'span 3' }, {}, {}, {}] }
+			],
+
+			5: [
+				{ id: '5-center', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{ gridColumn: 'span 2' }, { gridRow: 'span 2' }, { gridRow: 'span 2' }, {}, { gridColumn: 'span 2' }] },
+				{ id: '5-l3r2', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{}, { gridColumn: 'span 2' }, {}, { gridRow: 'span 2', gridColumn: 'span 2' }, {}] },
+				{ id: '5-131', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{ gridRow: 'span 3' }, {}, { gridRow: 'span 3' }, {}, {}] },
+				{ id: '5-l2r3', css: 'repeat(3, 1fr) / repeat(2, 1fr)', slots: [{ gridRow: 'span 2' }, {}, {}, {}, {}] },
+				{ id: '5-t2b3', css: 'repeat(2, 1fr) / repeat(3, 1fr)', slots: [{ gridColumn: 'span 2' }, {}, {}, {}, {}] },
+				{ id: '5-center-h-bar', css: 'repeat(3, 1fr) / repeat(2, 1fr)', slots: [{}, { gridArea: '1 / 2 / span 1 / span 1' }, { gridArea: '2 / 1 / span 1 / span 2' }, { gridArea: '3 / 1 / span 1 / span 1' }, { gridArea: '3 / 2 / span 1 / span 1' }] },
+			],
+
+			6: [
+				{ id: '6-g3x2', css: 'repeat(3, 1fr) / repeat(2, 1fr)', slots: [{}, {}, {}, {}, {}, {}] },
+				{ id: '6-g2x3', css: 'repeat(2, 1fr) / repeat(3, 1fr)', slots: [{}, {}, {}, {}, {}, {}] },
+				{ id: '6-center', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{ gridColumn: 'span 3' }, { gridRow: 'span 2' }, { gridRow: 'span 3' }, { gridRow: 'span 2', gridColumn: 'span 2' }, { gridRow: 'span 2' }, { gridColumn: 'span 2' }] },
+				{ id: '6-123', css: 'repeat(3, 1fr) / repeat(6, 1fr)', slots: [{ gridColumn: 'span 6' }, { gridColumn: 'span 3' }, { gridColumn: 'span 3' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }] },
+				{ id: '6-321', css: 'repeat(3, 1fr) / repeat(6, 1fr)', slots: [{ gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 3' }, { gridColumn: 'span 3' }, { gridColumn: 'span 6' }] },
+			],
+
+			7: [
+				{ id: '7-main', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{ gridRow: 'span 2', gridColumn: 'span 2' }, { gridRow: 'span 2', gridColumn: 'span 2' }, { gridRow: 'span 2', gridColumn: 'span 2' }, {}, {}, {}, {}] },
+				{ id: '7-h-center-band', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{}, {}, {}, { gridColumn: 'span 3' }, {}, {}, {}] },
+				{ id: '7-w-center-band', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{}, { gridRow: 'span 3' }, {}, {}, {}, {}, {}] },
+				{ id: '7-feat-l', css: 'repeat(4, 1fr) / repeat(2, 1fr)', slots: [{ gridRow: 'span 2' }, {}, {}, {}, {}, {}, {}] },
+				{ id: '7-feat-t', css: 'repeat(4, 1fr) / repeat(2, 1fr)', slots: [{}, {}, {}, {}, {}, { gridRow: 'span 2' }, {}] },
+				{ id: '7-311', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{ gridColumn: 'span 3' }, {}, {}, {}, {}, {}, {}] },
+			],
+
+			8: [
+				{ id: '8-g4x2', css: 'repeat(4, 1fr) / repeat(2, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '8-g2x4', css: 'repeat(2, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '8-222', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{ gridColumn: 'span 2' }, { gridRow: 'span 2' }, { gridRow: 'span 2' }, { gridColumn: 'span 2' }, { gridRow: 'span 2' }, { gridRow: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }] },
+				{ id: '8-l2-tall-r6-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{ gridRow: 'span 3' }, {}, {}, { gridRow: 'span 3' }, {}, {}, {}, {}] },
+				{ id: '8-sandwich-6', css: 'repeat(4, 1fr) / repeat(3, 1fr)', slots: [{ gridColumn: 'span 3' }, { gridArea: '2 / 1 / span 1 / span 1' }, { gridArea: '2 / 2 / span 1 / span 1' }, { gridArea: '2 / 3 / span 1 / span 1' }, { gridArea: '3 / 1 / span 1 / span 1' }, { gridArea: '3 / 2 / span 1 / span 1' }, { gridArea: '3 / 3 / span 1 / span 1' }, { gridArea: '4 / 1 / span 1 / span 3' }] },
+			],
+
+			9: [
+				{ id: '9-grid', css: 'repeat(3, 1fr) / repeat(3, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '9-144-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{ gridColumn: 'span 4' }, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '9-414-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, { gridColumn: 'span 4' }, {}, {}, {}, {}] },
+				{ id: '9-441-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, { gridColumn: 'span 4' }] },
+				{ id: '9-211-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{ gridRow: 'span 2', gridColumn: 'span 2' }, {}, {}, {}, {}, {}, {}, {}, {}] },
+			],
+
+			10: [
+				{ id: '10-g5x2', css: 'repeat(5, 1fr) / repeat(2, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '10-t2b8-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{ gridColumn: 'span 2' }, { gridColumn: 'span 2' }, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '10-424-grid', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, {}, {}, {}, {}] },
+				{ id: '10-4x3-grid', css: 'repeat(4, 1fr) / repeat(3, 1fr)', slots: [{ gridColumn: 'span 3' }, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+			],
+
+			11: [
+				{ id: '11-4c4-t', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, { gridRow: 'span 2' }, { gridRow: 'span 2', gridColumn: 'span 2' }, { gridRow: 'span 2' }, {}, {}, {}, {}] },
+				{ id: '11-4x4-t', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, { gridColumn: 'span 2' }, {}, {}, { gridRow: 'span 2', gridColumn: 'span 2' }, {}, {}, {}, {}, { gridColumn: 'span 2' }, {}] },
+				{ id: '11-4x6-t', css: 'repeat(4, 1fr) / repeat(6, 1fr)', slots: [{ gridColumn: 'span 3' }, { gridColumn: 'span 3' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }, { gridColumn: 'span 2' }] },
+			],
+
+			12: [
+				{ id: '12-g4x3', css: 'repeat(4, 1fr) / repeat(3, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '12-g3x4', css: 'repeat(3, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '12-g6x6', css: 'repeat(6, 1fr) / repeat(6, 1fr)', slots: [{ gridRow: 'span 5', gridColumn: 'span 5' }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] }
+			],
+
+			13: [
+				{ id: '13-feat-c', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, { gridRow: 'span 2', gridColumn: 'span 2' }, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '13-211', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{ gridRow: 'span 2', gridColumn: 'span 2' }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '13-112', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { gridRow: 'span 2', gridColumn: 'span 2' }, {}, {}] }
+			],
+
+			14: [
+				{ id: '14-g7x2', css: 'repeat(7, 1fr) / repeat(2, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '14-g4x4r', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, { gridColumn: 'span 2' }, {}, {}, { gridColumn: 'span 2' }, {}, {}, {}, {}, {}] },
+				{ id: '14-g4x4c', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, { gridRow: 'span 2' }, { gridRow: 'span 2' }, {}, {}, {}, {}, {}, {}, {}] }
+			],
+
+			15: [
+				{ id: '15-g5x3', css: 'repeat(5, 1fr) / repeat(3, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '15-g4x4c', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, { gridColumn: 'span 2' }, {}, {}, {}, {}, {}, {}, {}, {}, {}] },
+				{ id: '15-g4x4f', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { gridColumn: 'span 2' }] }
+			],
+
+			16: [
+				{ id: '16-g4x4', css: 'repeat(4, 1fr) / repeat(4, 1fr)', slots: [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}] }
+			]
+		};
+
+		// 水印配置（只需在这里修改即可，UI上不会显示）
+		let WATERMARK = {
+			enabled: false,                          // false关闭水印
+			text: 'gaituxia.com',
+			font: '28px Microsoft YaHei',            // 字体大小（可调大更明显）
+			color: 'rgba(255, 255, 255, 0.8)',       // 白色半透明主体文字
+			shadow: '2px 2px 4px rgba(0,0,0,0.5)',   // 黑色阴影（突出显示，适合任何背景）
+			offsetX: 30,                            // 左边距（px）
+			offsetY: 50                             // 底边距（px）
+		};
+		let currentSlotIdxForBg = null;
+
+		// 获取格子背景色
+		function getSlotBgColor(idx) {
+			const imgs = getCurrentGridImgs();
+			return imgs[idx]?.slotBgColor || '#f1f5f9';
+		}
+
+		// 设置格子背景色
+		function setSlotBgColor(idx, color) {
+			const imgs = getCurrentGridImgs();
+			if (!imgs[idx]) imgs[idx] = {};
+			imgs[idx].slotBgColor = color;
+			const slot = document.querySelector(`.grid-slot[data-idx="${idx}"]`);
+			if (slot) slot.style.background = color;
+		}
+
+		// 触发颜色选择器
+		function pickSlotBgColor(idx) {
+			currentSlotIdxForBg = idx;
+			const picker = document.getElementById('slot-bg-picker');
+			picker.value = getSlotBgColor(idx);
+			picker.click();
+		}
+		const state = {
+			mode: 'layout',
+			layout: { count: 4, tplId: '4-grid', imgs: {}, bgColor: '#ffffff', backgroundImage: null },
+			stitch: { dir: 'v', imgs: [], bgColor: '#ffffff', backgroundImage: null },
+			custom: { rows: 3, cols: 3, imgs: {}, bgColor: '#ffffff', backgroundImage: null },
+			width: 1440, height: 1440, viewScale: 1,
+			leftOpen: true, rightOpen: true
+		};
+
+		const container = document.getElementById('physical-container');
+		const canvas = document.getElementById('collage-canvas');
+		const workspace = document.getElementById('workspace');
+
+		function init() {
+			renderLayoutSidebar();
+			state.width = 1440; state.height = 1440;
+			container.style.width = '1440px'; container.style.height = '1440px';
+			switchMode('layout');
+			window.addEventListener('resize', () => setTimeout(fitViewport, 50));
+			document.getElementById('hidden-file-input').addEventListener('change', e => handleUpload(e.target.files));
+			document.getElementById('bg-image-input').addEventListener('change', e => {
+				if (e.target.files[0]) {
+					handleBgImageUpload(e.target.files[0]);
+					e.target.value = '';
+				}
+			});
+			document.getElementById('bg-picker').value = state.layout.bgColor;
+			updateBg();
+			refreshCanvas();
+			document.getElementById('slot-bg-picker').addEventListener('change', e => {
+				console.log(11);
+
+				if (currentSlotIdxForBg !== null) {
+					setSlotBgColor(currentSlotIdxForBg, e.target.value);
+					currentSlotIdxForBg = null;
+				}
+			});
+
+			document.getElementById('slot-bg-picker').addEventListener('input', (e) => {
+				setSlotBgColor(currentSlotIdxForBg, e.target.value);
+			});
+		}
+
+		function scrollToCategory(count) {
+			const target = document.getElementById(`cat-${count}`);
+			if (target) {
+				target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+		}
+
+		function handleTemplateListScroll() {
+			if (window.innerWidth <= 768) return;
+
+			const listContainer = document.getElementById('layout-list-container');
+			const containerRect = listContainer.getBoundingClientRect();
+
+			let bestCount = null;
+			let minDist = Infinity;
+
+			document.querySelectorAll('.cat-item').forEach(cat => {
+				const rect = cat.getBoundingClientRect();
+				const dist = Math.abs(rect.top - containerRect.top);
+				if (dist < minDist) {
+					minDist = dist;
+					bestCount = cat.id.split('-')[1];
+				}
+			});
+
+			if (bestCount) {
+				const select = document.getElementById('template-select');
+				if (select.value !== bestCount) {
+					select.value = bestCount;
+				}
+			}
+		}
+
+		function setCurrentCategory(count) {
+			document.querySelectorAll('.layout-category-list .cat-item').forEach(cat => {
+				cat.classList.remove('current');
+			});
+			const currentCat = document.getElementById(`cat-${count}`);
+			if (currentCat) {
+				currentCat.classList.add('current');
+				if (window.innerWidth <= 768) {
+					currentCat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			}
+		}
+
+		function renderLayoutSidebar() {
+			const list = document.getElementById('layout-list-container');
+			list.innerHTML = '';
+
+			const select = document.getElementById('template-select');
+			select.innerHTML = '';
+
+			Object.keys(templates).sort((a, b) => a - b).forEach(count => {
+				const opt = document.createElement('option');
+				opt.value = count;
+				opt.textContent = `${count}张图片 (${templates[count].length}个模板)`;
+				select.appendChild(opt);
+
+				const cat = document.createElement('div');
+				cat.className = 'cat-item';
+				cat.id = `cat-${count}`;
+
+				const head = document.createElement('div');
+				head.className = 'cat-header';
+				head.innerHTML = `<span>${count} 张图片</span>`;
+
+				const body = document.createElement('div');
+				body.className = 'cat-body';
+
+				templates[count].forEach(tpl => {
+					const t = document.createElement('div');
+					t.className = 'tpl-thumb';
+					t.style.gridTemplate = tpl.css;
+
+					for (let k = 0; k < count; k++) {
+						const b = document.createElement('div');
+						if (tpl.slots && tpl.slots[k]) Object.assign(b.style, tpl.slots[k]);
+						t.appendChild(b);
+					}
+
+					t.onclick = (e) => {
+						e.stopPropagation();
+						document.querySelectorAll('.tpl-thumb').forEach(x => x.classList.remove('active'));
+						t.classList.add('active');
+						applyLayoutMode(count, tpl);
+					};
+
+					body.appendChild(t);
+				});
+
+				cat.appendChild(head);
+				cat.appendChild(body);
+				list.appendChild(cat);
+			});
+
+			select.onchange = () => {
+				const newCount = select.value;
+				state.layout.count = parseInt(newCount);
+				setCurrentCategory(newCount);
+				scrollToCategory(newCount);
+			};
+
+			list.onscroll = handleTemplateListScroll;
+
+			setCurrentCategory(state.layout.count);
+			select.value = state.layout.count;
+			scrollToCategory(state.layout.count);
+		}
+
+		function switchMode(mode) {
+			state.mode = mode;
+			const tabs = document.querySelectorAll('.mode-tab');
+			tabs.forEach(t => t.classList.remove('active'));
+			if (mode === 'layout') tabs[0].classList.add('active');
+			else if (mode === 'stitch') tabs[1].classList.add('active');
+			else if (mode === 'custom') tabs[2].classList.add('active');
+
+			document.getElementById('view-layout').style.display = mode === 'layout' ? 'flex' : 'none';
+			document.getElementById('view-stitch').style.display = mode === 'stitch' ? 'flex' : 'none';
+
+			document.getElementById('layout-uploader').style.display = (mode === 'layout' || mode === 'custom') ? 'block' : 'none';
+
+			const d = state.stitch.dir;
+			document.getElementById('stitch-v-config').style.display = mode === 'stitch' && d === 'v' ? 'block' : 'none';
+			document.getElementById('stitch-h-config').style.display = mode === 'stitch' && d === 'h' ? 'block' : 'none';
+
+			let bg;
+			if (mode === 'layout') bg = state.layout.bgColor;
+			else if (mode === 'custom') bg = state.custom.bgColor;
+			else bg = state.stitch.bgColor;
+			document.getElementById('bg-picker').value = bg;
+
+			canvas.className = mode === 'stitch' ? `mode-stitch stitch-${state.stitch.dir}` : 'mode-layout';
+
+			workspace.scrollTo(0, 0);
+
+			if (mode === 'layout') renderLayoutSidebar();
+
+			refreshCanvas();
+			fitViewport();
+		}
+
+		function handleBgImageUpload(file) {
+			const r = new FileReader();
+			r.onload = ev => {
+				const src = ev.target.result;
+				if (state.mode === 'layout') state.layout.backgroundImage = src;
+				else if (state.mode === 'custom') state.custom.backgroundImage = src;
+				else state.stitch.backgroundImage = src;
+				refreshCanvas();
+			};
+			r.readAsDataURL(file);
+		}
+
+		function clearBackground() {
+			if (state.mode === 'layout') state.layout.backgroundImage = null;
+			else if (state.mode === 'custom') state.custom.backgroundImage = null;
+			else state.stitch.backgroundImage = null;
+			refreshCanvas();
+		}
+
+		function updateSingleSlot(idx) {
+			const slot = document.querySelector(`.grid-slot[data-idx="${idx}"]`);
+			if (!slot) return;
+
+			const imgs = getCurrentGridImgs();
+			const data = imgs[idx];
+
+			slot.innerHTML = '';
+			slot.className = 'grid-slot' + (data ? '' : ' empty');
+
+			if (data) {
+				renderLayoutImg(slot, data, idx);
+			} else {
+				slot.onclick = () => triggerUpload(idx);
+			}
+		}
+
+		function refreshCanvas() {
+			updateStyle();
+
+			const currentState = state.mode === 'layout' ? state.layout : state.mode === 'custom' ? state.custom : state.stitch;
+			const bgColor = currentState.bgColor;
+			const bgImage = currentState.backgroundImage;
+
+			const isGridMode = state.mode === 'layout' || state.mode === 'custom';
+			if (isGridMode) {
+				container.style.display = 'flex';
+				container.style.boxShadow = '0 10px 50px rgba(0, 0, 0, 0.5)';
+				container.style.margin = '0';
+
+				let count, tpl = null, tplCss, imgs;
+				if (state.mode === 'layout') {
+					tpl = templates[state.layout.count].find(t => t.id === state.layout.tplId) || templates[state.layout.count][0];
+					count = state.layout.count;
+					tplCss = tpl.css;
+					imgs = state.layout.imgs;
+				} else {
+					count = state.custom.rows * state.custom.cols;
+					tplCss = `repeat(${state.custom.rows}, 1fr) / repeat(${state.custom.cols}, 1fr)`;
+					imgs = state.custom.imgs;
+				}
+
+				container.style.width = state.width + 'px';
+				container.style.height = state.height + 'px';
+
+				if (bgImage) {
+					container.style.background = `url(${bgImage}) center/cover no-repeat`;
+				} else {
+					container.style.background = bgColor;
+				}
+
+				canvas.style.display = 'grid';
+				canvas.style.gridTemplate = tplCss;
+
+				canvas.innerHTML = '';
+				for (let i = 0; i < count; i++) {
+					const slot = document.createElement('div');
+					slot.className = 'grid-slot' + (imgs[i] ? '' : ' empty');
+					slot.dataset.idx = i;
+
+					if (tpl && tpl.slots && tpl.slots[i]) {
+						Object.assign(slot.style, tpl.slots[i]);
+					}
+					slot.style.background = getSlotBgColor(i);
+					if (imgs[i]) {
+						renderLayoutImg(slot, imgs[i], i);
+					} else {
+						slot.onclick = () => triggerUpload(i);
+						// 空格子hover显示上传+背景色按钮
+						const ctrls = document.createElement('div');
+						ctrls.className = 'slot-controls';
+						ctrls.innerHTML = `
+						<div class="ctrl-row">
+							<div class="icon-btn" onclick="triggerUpload(${i})"><i class="fas fa-plus-circle"></i></div>
+							<div class="icon-btn" onclick="pickSlotBgColor(${i})"><i class="fas fa-palette"></i></div>
+						</div>
+					`;
+					}
+					canvas.appendChild(slot);
+				}
+			} else {
+				if (state.stitch.imgs.length === 0) {
+					container.style.display = 'none';
+				} else {
+					container.style.display = 'flex';
+					container.style.boxShadow = 'none';
+					canvas.style.display = 'flex';
+					canvas.style.padding = document.getElementById('ctrl-padding').value + 'px';
+					canvas.style.gap = document.getElementById('ctrl-gap').value + 'px';
+					// canvas.style.backgroundColor = 'transparent';
+					if (state.stitch.dir === 'v') {
+						container.style.width = '600px';
+						container.style.height = 'auto';
+						container.style.margin = '20px auto';
+					} else {
+						container.style.height = '300px';
+						container.style.width = 'auto';
+						container.style.margin = 'auto 20px';
+					}
+
+					if (bgImage) {
+						container.style.background = `url(${bgImage}) center/cover no-repeat`;
+					} else {
+						container.style.background = bgColor;
+					}
+
+					canvas.innerHTML = '';
+					state.stitch.imgs.forEach((imgData, idx) => {
+						const slot = document.createElement('div');
+						slot.className = 'grid-slot';
+						const img = document.createElement('img');
+						img.src = imgData.src;
+						slot.appendChild(img);
+						const ctrls = document.createElement('div');
+						ctrls.className = 'slot-controls';
+						ctrls.innerHTML = `<div class="icon-btn" onclick="insertStitchImg(${idx})"><i class="fas fa-plus"></i></div><div class="icon-btn delete" onclick="deleteStitchImg(${idx})"><i class="fas fa-trash"></i></div>`;
+						slot.appendChild(ctrls);
+						canvas.appendChild(slot);
+					});
+				}
+			}
+			setTimeout(fitViewport, 100);
+		}
+
+		function updateCustomRows(val) {
+			let n = parseInt(val);
+			if (isNaN(n) || n < 1) n = 1;
+			if (n > 20) n = 20;
+			state.custom.rows = n;
+			document.getElementById('custom-rows-input').value = n;
+			refreshCanvas();
+		}
+
+		function updateCustomCols(val) {
+			let n = parseInt(val);
+			if (isNaN(n) || n < 1) n = 1;
+			if (n > 20) n = 20;
+			state.custom.cols = n;
+			document.getElementById('custom-cols-input').value = n;
+			refreshCanvas();
+		}
+
+		function triggerUpload(idx) {
+			const inp = document.createElement('input');
+			inp.type = 'file';
+			inp.accept = 'image/*';
+			inp.onchange = e => {
+				if (!e.target.files[0]) return;
+				const r = new FileReader();
+				r.onload = ev => {
+					const imgs = getCurrentGridImgs();
+					const existingBg = imgs[idx]?.slotBgColor;  // 保留原有背景色
+					imgs[idx] = { src: ev.target.result, x: 0, y: 0, scale: 1, isNew: true, flipH: 1, flipV: 1 };
+					if (existingBg) imgs[idx].slotBgColor = existingBg;
+					updateSingleSlot(idx);
+				};
+				r.readAsDataURL(e.target.files[0]);
+			};
+			inp.click();
+		}
+
+		function handleUpload(files) {
+			Array.from(files).forEach(f => {
+				const r = new FileReader();
+				r.onload = ev => {
+					const src = ev.target.result;
+					if (state.mode === 'layout' || state.mode === 'custom') {
+						const imgs = getCurrentGridImgs();
+						const max = state.mode === 'layout' ? state.layout.count : state.custom.rows * state.custom.cols;
+						let p = 0;
+						while (p < max && imgs[p]) p++;
+						if (p < max) {
+							imgs[p] = { src, x: 0, y: 0, scale: 1, isNew: true, flipH: 1, flipV: 1 };
+							updateSingleSlot(p);
+						}
+					} else {
+						state.stitch.imgs.push({ src });
+						refreshCanvas();
+					}
+				};
+				r.readAsDataURL(f);
+			});
+		}
+
+		function deleteGridImg(idx) {
+			const imgs = getCurrentGridImgs();
+			delete imgs[idx];
+			updateSingleSlot(idx);
+		}
+
+		function renderLayoutImg(slot, data, idx) {
+			slot.style.background = data.slotBgColor || '#f1f5f9';
+			slot.innerHTML = '';
+			slot.onclick = null;
+			const img = document.createElement('img');
+			img.src = data.src;
+			img.id = `layout-img-${idx}`;
+			if (data.isNew) {
+				img.style.opacity = '0';
+				img.onload = () => {
+					requestAnimationFrame(() => {
+						const sW = slot.clientWidth, sH = slot.clientHeight;
+						const iW = img.naturalWidth || 1000, iH = img.naturalHeight || 1000;
+						if (sW > 0) {
+							data.scale = Math.min(sW / iW, sH / iH);
+							data.x = 0; data.y = 0; data.isNew = false;
+							data.flipH = 1; data.flipV = 1;
+							updateImgStyleDirectly(img, data);
+							img.style.opacity = '1';
+						}
+					});
+				};
+			} else {
+				updateImgStyleDirectly(img, data);
+			}
+			slot.appendChild(img);
+			bindEvents(slot, img, idx);
+			const ctrls = document.createElement('div');
+			ctrls.className = 'slot-controls';
+			ctrls.innerHTML = `
+                <div class="ctrl-row">
+                    <div class="icon-btn" onclick="fitImg(${idx})" title="适应"><i class="fas fa-compress"></i></div>
+                    <div class="icon-btn" onclick="stretchImg(${idx})" title="铺满"><i class="fas fa-expand"></i></div>
+                    <div class="icon-btn" onclick="mirrorImg(${idx}, 'h')" title="水平镜像"><i class="fas fa-arrows-alt-h"></i></div>
+                    <div class="icon-btn" onclick="mirrorImg(${idx}, 'v')" title="垂直镜像"><i class="fas fa-arrows-alt-v"></i></div>
+                </div>
+                <div class="ctrl-row">
+                    <div class="icon-btn" onclick="zoomImg(${idx}, 0.1)"><i class="fas fa-plus"></i></div>
+                    <div class="icon-btn" onclick="zoomImg(${idx}, -0.1)"><i class="fas fa-minus"></i></div>
+                    <div class="icon-btn" onclick="triggerUpload(${idx})"><i class="fas fa-sync"></i></div>
+					<div class="icon-btn" onclick="pickSlotBgColor(${idx})"><i class="fas fa-palette"></i></div>
+                    <div class="icon-btn delete" onclick="deleteGridImg(${idx})"><i class="fas fa-trash"></i></div>
+                </div>`;
+			slot.appendChild(ctrls);
+		}
+
+		function getCurrentGridImgs() {
+			return state.mode === 'layout' ? state.layout.imgs : state.custom.imgs;
+		}
+
+		function mirrorImg(idx, axis) {
+			const data = getCurrentGridImgs()[idx];
+			if (!data) return;
+			if (axis === 'h') data.flipH *= -1;
+			else data.flipV *= -1;
+			updateImgStyleDirectly(document.getElementById(`layout-img-${idx}`), data);
+		}
+
+		function updateImgStyleDirectly(img, data) {
+			if (!img) return;
+			const fH = data.flipH || 1; const fV = data.flipV || 1;
+			if (data.isStretch) {
+				img.style.width = '100%'; img.style.height = '100%'; img.style.objectFit = 'fill';
+				img.style.transform = `scale(${fH}, ${fV})`;
+			} else {
+				img.style.width = 'auto'; img.style.height = 'auto'; img.style.objectFit = 'contain';
+				img.style.transform = `translate(${data.x}px, ${data.y}px) scale(${data.scale * fH}, ${data.scale * fV})`;
+			}
+		}
+
+		function bindEvents(slot, img, idx) {
+			let isPan = false, startX, startY, ix, iy;
+			slot.onmousedown = e => {
+				if (e.target.closest('.icon-btn')) return;
+				const data = getCurrentGridImgs()[idx];
+				if (data.isStretch) return;
+				e.preventDefault();
+				isPan = true; startX = e.clientX; startY = e.clientY;
+				ix = data.x; iy = data.y;
+				slot.style.cursor = 'grabbing';
+			};
+			window.addEventListener('mousemove', e => {
+				if (!isPan) return;
+				const scale = state.viewScale || 1;
+				const dx = (e.clientX - startX) / scale; const dy = (e.clientY - startY) / scale;
+				const data = getCurrentGridImgs()[idx];
+				data.x = ix + dx; data.y = iy + dy;
+				updateImgStyleDirectly(img, data);
+			});
+			window.addEventListener('mouseup', () => { if (isPan) { isPan = false; slot.style.cursor = ''; } });
+			slot.addEventListener('wheel', e => {
+				e.preventDefault();
+				const delta = e.deltaY > 0 ? -0.1 : 0.1;
+				zoomImg(idx, delta);
+			}, { passive: false });
+		}
+
+		function zoomImg(idx, d) {
+			const data = getCurrentGridImgs()[idx];
+			if (!data) return;
+			data.isStretch = false;
+			let s = data.scale + d; if (s < 0.1) s = 0.1; data.scale = s;
+			const img = document.getElementById(`layout-img-${idx}`);
+			updateImgStyleDirectly(img, data);
+		}
+
+		function fitImg(idx) {
+			const slot = document.querySelector(`.grid-slot[data-idx="${idx}"]`);
+			const img = document.getElementById(`layout-img-${idx}`);
+			if (slot && img) {
+				const data = getCurrentGridImgs()[idx];
+				data.scale = Math.min(slot.clientWidth / img.naturalWidth, slot.clientHeight / img.naturalHeight);
+				data.x = 0; data.y = 0; data.isStretch = false;
+				updateImgStyleDirectly(img, data);
+			}
+		}
+
+		function stretchImg(idx) {
+			const data = getCurrentGridImgs()[idx];
+			if (!data) return;
+			data.isStretch = true;
+			const img = document.getElementById(`layout-img-${idx}`);
+			updateImgStyleDirectly(img, data);
+		}
+
+		function deleteStitchImg(idx) {
+			state.stitch.imgs.splice(idx, 1);
+			refreshCanvas();
+		}
+
+		function applyLayoutMode(count, tpl) {
+			state.layout.count = count;
+			state.layout.tplId = tpl.id;
+
+			const select = document.getElementById('template-select');
+			if (select) {
+				select.value = count;
+				setCurrentCategory(count);
+				scrollToCategory(count);
+			}
+
+			refreshCanvas();
+		}
+
+		function setStitchDir(d) {
+			state.stitch.dir = d;
+			document.getElementById('dir-v').className = d === 'v' ? 'dir-btn active' : 'dir-btn';
+			document.getElementById('dir-h').className = d === 'h' ? 'dir-btn active' : 'dir-btn';
+			document.getElementById('stitch-v-config').style.display = d === 'v' ? 'block' : 'none';
+			document.getElementById('stitch-h-config').style.display = d === 'h' ? 'block' : 'none';
+			canvas.className = `mode-stitch stitch-${d}`;
+			refreshCanvas();
+		}
+
+		function insertStitchImg(idx) {
+			const inp = document.createElement('input');
+			inp.type = 'file';
+			inp.accept = 'image/*';
+			inp.onchange = e => {
+				if (!e.target.files[0]) return;
+				const r = new FileReader();
+				r.onload = ev => {
+					state.stitch.imgs.splice(idx + 1, 0, { src: ev.target.result });
+					refreshCanvas();
+				};
+				r.readAsDataURL(e.target.files[0]);
+			};
+			inp.click();
+		}
+
+		function exportImage() {
+			const wrapper = document.createElement('div');
+			wrapper.style.position = 'fixed';
+			wrapper.style.top = '-9999px';
+			wrapper.style.zIndex = '-1';
+
+			let exportW, exportH, factor = 1;
+			const currentState = state.mode === 'layout' ? state.layout : state.mode === 'custom' ? state.custom : state.stitch;
+			const bgImage = currentState.backgroundImage;
+			const bgColor = currentState.bgColor;
+
+			if (state.mode === 'stitch') {
+				const configW = parseInt(document.getElementById('stitch-export-w').value) || 2000;
+				const configH = parseInt(document.getElementById('stitch-export-h').value) || 2000;
+
+				const pcW = canvas.offsetWidth;
+				const pcH = canvas.offsetHeight;
+
+				if (state.stitch.dir === 'v') {
+					factor = configW / pcW;
+					exportW = configW;
+					exportH = pcH * factor;
+				} else {
+					factor = configH / pcH;
+					exportH = configH;
+					exportW = pcW * factor;
+				}
+			} else {
+				exportW = state.width;
+				exportH = state.height;
+			}
+
+			wrapper.style.width = exportW + 'px';
+			wrapper.style.height = exportH + 'px';
+			document.body.appendChild(wrapper);
+
+			let clone = container.cloneNode(true);
+			clone.style.transform = 'none';
+			clone.style.boxShadow = 'none';
+			clone.style.margin = '0';
+			clone.style.width = exportW + 'px';
+			clone.style.height = exportH + 'px';
+			clone.style.position = 'relative';  // 关键：让水印div绝对定位相对它
+
+			const clonedCanvas = clone.querySelector('#collage-canvas');
+
+			clonedCanvas.style.width = exportW + 'px';
+			clonedCanvas.style.height = exportH + 'px';
+			clonedCanvas.style.boxSizing = 'border-box';
+
+			if (state.mode === 'stitch') {
+				clonedCanvas.style.padding = (parseInt(document.getElementById('ctrl-padding').value) * factor) + 'px';
+				clonedCanvas.style.gap = (parseInt(document.getElementById('ctrl-gap').value) * factor) + 'px';
+			}
+
+			clone.querySelectorAll('.slot-controls').forEach(c => c.remove());
+			clone.querySelectorAll('.grid-slot.empty').forEach(e => {
+				e.innerHTML = '';
+				e.classList.remove('empty');
+				// e.style.background = 'transparent';
+				e.style.border = 'none';
+			});
+
+			// === 新增带阴影的水印div（绝对可靠，白色+黑影）===
+			if (WATERMARK.enabled) {
+				const watermarkDiv = document.createElement('div');
+				watermarkDiv.textContent = WATERMARK.text;
+				watermarkDiv.style.position = 'absolute';
+				watermarkDiv.style.left = WATERMARK.offsetX + 'px';
+				watermarkDiv.style.bottom = WATERMARK.offsetY + 'px';
+				watermarkDiv.style.font = WATERMARK.font;
+				watermarkDiv.style.color = WATERMARK.color;
+				watermarkDiv.style.textShadow = WATERMARK.shadow;  // 关键：添加阴影
+				watermarkDiv.style.pointerEvents = 'none';
+				watermarkDiv.style.zIndex = '999';
+				watermarkDiv.style.userSelect = 'none';
+				watermarkDiv.style.whiteSpace = 'nowrap';  // 防止换行
+				clone.appendChild(watermarkDiv);
+			}
+
+			wrapper.appendChild(clone);
+
+			const fmt = document.getElementById('export-fmt').value;
+			const mime = fmt === 'png' ? 'image/png' : 'image/jpeg';
+
+			html2canvas(clone, {
+				scale: 1,
+				useCORS: true,
+				allowTaint: true,
+				backgroundColor: bgImage ? null : bgColor,
+				width: exportW,
+				height: exportH,
+				windowWidth: exportW,
+				windowHeight: exportH,
+				scrollY: 0,
+				scrollX: 0
+			}).then(cvs => {
+				document.body.removeChild(wrapper);
+				const a = document.createElement('a');
+				a.download = `拼图.${fmt}`;
+				a.href = cvs.toDataURL(mime, 1.0);
+				a.click();
+			});
+		}
+		function togglePanel(side) {
+			const panel = document.getElementById(`panel-${side}`);
+			const btn = document.getElementById(`toggle-${side}`);
+			panel.classList.toggle('collapsed');
+			if (side === 'left') {
+				state.leftOpen = !state.leftOpen;
+				btn.querySelector('i').className = state.leftOpen ? 'fas fa-chevron-left' : 'fas fa-chevron-right';
+				document.getElementById('pintu-container').classList.toggle('left-closed', !state.leftOpen);
+			} else {
+				state.rightOpen = !state.rightOpen;
+				btn.querySelector('i').className = state.rightOpen ? 'fas fa-chevron-right' : 'fas fa-chevron-left';
+				document.getElementById('pintu-container').classList.toggle('right-closed', !state.rightOpen);
+			}
+			setTimeout(fitViewport, 310);
+		}
+
+		function applyCustomSize() {
+			setSize(parseInt(document.getElementById('custom-w').value) || 1440, parseInt(document.getElementById('custom-h').value) || 1440);
+		}
+
+		function setSize(w, h) {
+			state.width = w; state.height = h; refreshCanvas();
+		}
+
+		function updateStyle() {
+			canvas.style.padding = document.getElementById('ctrl-padding').value + 'px';
+			canvas.style.gap = document.getElementById('ctrl-gap').value + 'px';
+			document.querySelectorAll('.grid-slot').forEach(el => el.style.borderRadius = document.getElementById('ctrl-radius').value + 'px');
+		}
+
+		function updateBg() {
+			const val = document.getElementById('bg-picker').value;
+			if (state.mode === 'layout') state.layout.bgColor = val;
+			else if (state.mode === 'custom') state.custom.bgColor = val;
+			else state.stitch.bgColor = val;
+			refreshCanvas();
+		}
+
+		function fitViewport() {
+			let pad = 40;
+			if (window.innerWidth <= 768) {
+				pad = 20;
+			}
+			const wsW = workspace.clientWidth;
+			const wsH = workspace.clientHeight;
+			if (state.mode !== 'stitch') {
+				workspace.style.overflow = 'hidden';
+				workspace.style.justifyContent = 'center';
+				workspace.style.alignItems = 'center';
+				container.style.transform = '';
+				let scale = Math.min((wsW - pad) / state.width, (wsH - pad) / state.height);
+				if (scale <= 0.01) scale = 0.01;
+				state.viewScale = scale;
+				container.style.transform = `scale(${scale})`;
+			} else {
+				container.style.transform = 'none';
+				if (state.stitch.dir === 'v') {
+					workspace.style.overflowX = 'auto';
+					workspace.style.overflowY = 'auto';
+					workspace.style.justifyContent = 'center';
+					workspace.style.alignItems = 'flex-start';
+				} else {
+					workspace.style.overflowX = 'auto';
+					workspace.style.overflowY = 'hidden';
+					workspace.style.justifyContent = 'flex-start';
+					workspace.style.alignItems = 'center';
+				}
+			}
+		}
+
+		init();
+	</script>
+</body>
+
+</html>
