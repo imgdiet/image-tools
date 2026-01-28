@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>图片尺寸修改工具</title>
+	<style>
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			background-color: #f4f6f8;
+			color: #333;
+			max-width: 900px;
+			margin: 2rem auto;
+			padding: 0 1rem;
+		}
+
+		.container {
+			background: white;
+			padding: 2rem;
+			border-radius: 12px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+		}
+
+		h1 {
+			text-align: center;
+			color: #2c3e50;
+			margin-bottom: 30px;
+		}
+
+		/* 上传区域 */
+		.upload-box {
+			border: 2px dashed #cbd5e0;
+			border-radius: 8px;
+			padding: 30px;
+			text-align: center;
+			cursor: pointer;
+			transition: 0.2s;
+			background: #fafbfc;
+		}
+
+		.upload-box:hover {
+			border-color: #4299e1;
+			background: #ebf8ff;
+		}
+
+		.upload-box p {
+			margin: 0;
+			color: #718096;
+			font-size: 1.1rem;
+		}
+
+		/* 控制面板 */
+		.controls {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 30px;
+			margin-top: 30px;
+			opacity: 0.5;
+			pointer-events: none;
+			transition: 0.3s;
+		}
+
+		.controls.active {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		.panel {
+			background: #f7fafc;
+			padding: 20px;
+			border-radius: 8px;
+			border: 1px solid #edf2f7;
+		}
+
+		.panel h3 {
+			margin-top: 0;
+			font-size: 1rem;
+			color: #4a5568;
+			margin-bottom: 15px;
+			border-bottom: 1px solid #e2e8f0;
+			padding-bottom: 10px;
+		}
+
+		.input-group {
+			margin-bottom: 15px;
+		}
+
+		.input-group label {
+			display: block;
+			font-size: 0.9rem;
+			margin-bottom: 5px;
+			font-weight: 600;
+			color: #4a5568;
+		}
+
+		.input-row {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+
+		input[type="number"] {
+			flex: 1;
+			padding: 8px 12px;
+			border: 1px solid #cbd5e0;
+			border-radius: 6px;
+			font-size: 1rem;
+		}
+
+		input[type="number"]:focus {
+			border-color: #4299e1;
+			outline: none;
+			box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+		}
+
+		/* 锁定比例图标/复选框 */
+		.lock-wrapper {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: #edf2f7;
+			padding: 5px;
+			border-radius: 4px;
+			cursor: pointer;
+			user-select: none;
+		}
+
+		.lock-wrapper input {
+			margin-right: 5px;
+		}
+
+		.lock-wrapper span {
+			font-size: 0.85rem;
+			color: #4a5568;
+		}
+
+		/* 快捷百分比按钮 */
+		.presets {
+			display: flex;
+			gap: 10px;
+			margin-top: 10px;
+		}
+
+		.btn-sm {
+			flex: 1;
+			padding: 6px;
+			border: 1px solid #cbd5e0;
+			background: white;
+			border-radius: 4px;
+			cursor: pointer;
+			font-size: 0.85rem;
+			transition: 0.1s;
+		}
+
+		.btn-sm:hover {
+			background: #edf2f7;
+		}
+
+		.btn-action {
+			width: 100%;
+			padding: 12px;
+			background: #4299e1;
+			color: white;
+			border: none;
+			border-radius: 6px;
+			font-size: 1rem;
+			font-weight: bold;
+			cursor: pointer;
+			margin-top: 20px;
+			transition: 0.2s;
+		}
+
+		.btn-action:hover {
+			background: #3182ce;
+		}
+
+		/* 预览区域 */
+		.preview-area {
+			margin-top: 30px;
+			text-align: center;
+			display: none;
+		}
+
+		.preview-area img {
+			max-width: 100%;
+			border: 1px solid #e2e8f0;
+			border-radius: 4px;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+		}
+
+		.info-bar {
+			margin-top: 10px;
+			font-family: monospace;
+			color: #718096;
+		}
+	</style>
+</head>
+
+<body>
+
+	<div class="container">
+		<h1>图片尺寸修改工具</h1>
+
+		<div class="upload-box" onclick="document.getElementById('fileInput').click()">
+			<input type="file" id="fileInput" accept="image/*" hidden>
+			<p>📁 点击选择图片 或 拖拽至此处</p>
+		</div>
+
+		<div class="controls" id="controlPanel">
+			<div class="panel">
+				<h3>尺寸设置 (Pixels)</h3>
+
+				<div class="input-row">
+					<div class="input-group" style="flex:1">
+						<label>宽度 (Width)</label>
+						<input type="number" id="widthInput">
+					</div>
+
+					<div style="padding-top: 18px;">
+						<label class="lock-wrapper" title="锁定长宽比">
+							<input type="checkbox" id="ratioLock" checked>
+							<span>🔒</span>
+						</label>
+					</div>
+
+					<div class="input-group" style="flex:1">
+						<label>高度 (Height)</label>
+						<input type="number" id="heightInput">
+					</div>
+				</div>
+
+				<div class="input-group">
+					<label>快捷缩放</label>
+					<div class="presets">
+						<button class="btn-sm" onclick="scaleImage(0.25)">25%</button>
+						<button class="btn-sm" onclick="scaleImage(0.50)">50%</button>
+						<button class="btn-sm" onclick="scaleImage(0.75)">75%</button>
+						<button class="btn-sm" onclick="resetSize()">原始</button>
+					</div>
+				</div>
+			</div>
+
+			<div class="panel" style="display: flex; flex-direction: column; justify-content: space-between;">
+				<div>
+					<h3>输出设置</h3>
+					<div class="input-group">
+						<label>输出格式</label>
+						<select id="formatSelect"
+							style="width:100%; padding:8px; border:1px solid #cbd5e0; border-radius:6px;">
+							<option value="image/jpeg">JPG (适合照片)</option>
+							<option value="image/png">PNG (适合图标/透明)</option>
+							<option value="image/webp">WebP (更小体积)</option>
+						</select>
+					</div>
+					<div class="input-group">
+						<label>质量 (仅JPG/WebP)</label>
+						<input type="range" id="qualityRange" min="0.1" max="1.0" step="0.1" value="0.9"
+							style="width:100%">
+					</div>
+				</div>
+
+				<button class="btn-action" id="downloadBtn">下载处理后的图片</button>
+			</div>
+		</div>
+
+		<div class="preview-area" id="previewArea">
+			<div class="info-bar" id="resultInfo"></div>
+			<br>
+			<img id="resultImage" alt="Result">
+		</div>
+	</div>
+
+	<script>
+		const els = {
+			fileInput: document.getElementById('fileInput'),
+			controlPanel: document.getElementById('controlPanel'),
+			widthInput: document.getElementById('widthInput'),
+			heightInput: document.getElementById('heightInput'),
+			ratioLock: document.getElementById('ratioLock'),
+			formatSelect: document.getElementById('formatSelect'),
+			qualityRange: document.getElementById('qualityRange'),
+			downloadBtn: document.getElementById('downloadBtn'),
+			previewArea: document.getElementById('previewArea'),
+			resultImage: document.getElementById('resultImage'),
+			resultInfo: document.getElementById('resultInfo')
+		};
+
+		let originalImage = new Image();
+		let originalFile = null;
+		let aspectRatio = 0;
+
+		els.fileInput.addEventListener('change', function (e) {
+			const file = e.target.files[0];
+			if (!file) return;
+			originalFile = file;
+
+			const reader = new FileReader();
+			reader.onload = function (event) {
+				originalImage.src = event.target.result;
+			};
+			reader.readAsDataURL(file);
+		});
+
+		originalImage.onload = function () {
+			aspectRatio = originalImage.naturalWidth / originalImage.naturalHeight;
+
+			els.widthInput.value = originalImage.naturalWidth;
+			els.heightInput.value = originalImage.naturalHeight;
+
+			els.controlPanel.classList.add('active');
+
+			processImage();
+		};
+
+		els.widthInput.addEventListener('input', function () {
+			if (els.ratioLock.checked && els.widthInput.value) {
+				const w = parseFloat(els.widthInput.value);
+				els.heightInput.value = Math.round(w / aspectRatio);
+			}
+			debounceProcess();
+		});
+
+		els.heightInput.addEventListener('input', function () {
+			if (els.ratioLock.checked && els.heightInput.value) {
+				const h = parseFloat(els.heightInput.value);
+				els.widthInput.value = Math.round(h * aspectRatio);
+			}
+			debounceProcess();
+		});
+
+		window.scaleImage = function (factor) {
+			els.widthInput.value = Math.round(originalImage.naturalWidth * factor);
+			els.heightInput.value = Math.round(originalImage.naturalHeight * factor);
+			processImage();
+		};
+
+		window.resetSize = function () {
+			els.widthInput.value = originalImage.naturalWidth;
+			els.heightInput.value = originalImage.naturalHeight;
+			processImage();
+		};
+
+		let timeout;
+		function debounceProcess() {
+			clearTimeout(timeout);
+			timeout = setTimeout(processImage, 300); 
+		}
+
+		function processImage() {
+			if (!originalImage.src) return;
+
+			const targetW = parseInt(els.widthInput.value);
+			const targetH = parseInt(els.heightInput.value);
+
+			if (!targetW || !targetH) return;
+
+			const canvas = document.createElement('canvas');
+			canvas.width = targetW;
+			canvas.height = targetH;
+
+			const ctx = canvas.getContext('2d');
+
+			ctx.imageSmoothingEnabled = true;
+			ctx.imageSmoothingQuality = 'high';
+
+			ctx.drawImage(originalImage, 0, 0, targetW, targetH);
+
+			const format = els.formatSelect.value;
+			const quality = parseFloat(els.qualityRange.value);
+
+			canvas.toBlob(function (blob) {
+				if (!blob) return;
+
+				const url = URL.createObjectURL(blob);
+				els.resultImage.src = url;
+				els.previewArea.style.display = 'block';
+
+				els.resultInfo.textContent = `原始: ${originalImage.naturalWidth}x${originalImage.naturalHeight} | 结果: ${targetW}x${targetH} (${(blob.size / 1024).toFixed(1)} KB)`;
+
+				els.downloadBtn.onclick = function () {
+					const link = document.createElement('a');
+					link.href = url;
+					const ext = format.split('/')[1];
+					link.download = `resized_${targetW}x${targetH}_${Date.now()}.${ext}`;
+					link.click();
+				};
+			}, format, quality);
+		}
+
+		els.formatSelect.addEventListener('change', processImage);
+		els.qualityRange.addEventListener('change', processImage);
+
+		const dropZone = document.querySelector('.upload-box');
+		dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#4299e1'; });
+		dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.borderColor = '#cbd5e0'; });
+		dropZone.addEventListener('drop', (e) => {
+			e.preventDefault();
+			dropZone.style.borderColor = '#cbd5e0';
+			if (e.dataTransfer.files.length) {
+				els.fileInput.files = e.dataTransfer.files;
+				const event = new Event('change');
+				els.fileInput.dispatchEvent(event);
+			}
+		});
+
+	</script>
+</body>
+
+</html>
